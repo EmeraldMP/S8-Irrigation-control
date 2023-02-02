@@ -66,8 +66,8 @@ class IrrigationAnalysis:
     def __init__(self, dates = ('2022-04-01', '2022-09-15'), crop_type='Potato', soil_class = 'SIL'):
         self.dates = pd.date_range(dates[0], dates[1])
         self.crop = Crop(crop_type)
-        self.data_path = '/DSSAT47/LAI Ex.xlsx'
-        self.wth_path = '/DSSAT47/Meteo.xlsx'
+        self.data_path = 'LAI Ex.xlsx'
+        self.wth_path = 'Meteo.xlsx'
         self.soil = soil_class
 
     def reset_coeff(self): #pour prendre en compte les coefficients de base
@@ -238,7 +238,6 @@ class IrrigationAnalysis:
         New_doc = pd.DataFrame({df_data.columns.values[0] : [],df_data.columns.values[1] : [],df_data.columns.values[2] : [],df_data.columns.values[3] : [],df_data.columns.values[4] : []})
         
         coords = np.unique(df_data['GPS'])
-        print(coords.shape)
 
         for i in range(coords.shape[0]):
             initial_params = [3.5, 0.8, 0.6]
@@ -285,7 +284,6 @@ class IrrigationAnalysis:
     
 if __name__=='__main__':
     irri = IrrigationAnalysis()
-    irri.data_path = 'LAI Ex.xlsx'
     # print(irri.afficher(irchange=[300,40,5,70,8], show_graph=True)) 
     print( irri.results(type_ir='A'))
     # print(irri.irrigation(show_graph=True))
