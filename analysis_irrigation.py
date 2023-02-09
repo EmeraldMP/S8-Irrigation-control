@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 from DSSATTools import (
     Crop, SoilProfile, WeatherData, WeatherStation, Management, DSSAT)
 from DSSATTools.base.sections import TabularSubsection
-from tradssat import CULFile, ECOFile
 from scipy.optimize import minimize
 
 
