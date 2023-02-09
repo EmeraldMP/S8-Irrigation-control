@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import DSSATTools
-print(DSSATTools.__file__)
 
 DATES = pd.date_range('2022-04-01', '2022-09-15')
 crop = Crop('Potato')
@@ -93,7 +92,7 @@ def results(irrig ,Wth,plant_date = DATES[0],Param = 'LAID'):
     dssat.setup("C:\\Users\\MELANI~1\\AppData\\Local\\Temp\\Expe")
     dssat.run(soil=soil, weather=wth_station, crop=crop, management=man) #On fait tourner le logiciel
     a = dssat.output['PlantGro'][:] 
-    print(type(a))
+    # print(type(a))
     #dssat.close() #On referme l'instance (cela supprime le fichier créé ). S'il y a une erreur sur cette ligne c'est qu'il y a un problème dans la fonction du module il faut changer la fonction close par celle qui est tout en bas de ce fichier
     return a[Param] #On retourne le paramètre qui nous intéresse
 
@@ -138,7 +137,7 @@ def results2(Wth = '/DSSAT47/Meteo.xlsx',plant_date = DATES[0],Param = 'LAID', s
     for line in file:
         lines.append(line)
     file.close()
-    print(lines)
+    # print(lines)
     for i in range(14,len(lines)):
         values.append(float(lines[i].split()[9]))
         dates.append(int(lines[i].split()[0][2:4]+lines[i].split()[1]))
@@ -243,7 +242,7 @@ def irrigation(Data = 'LAI Ex.xlsx',Wth = 'Meteo.xlsx', next_date= "2022-05-08",
     New_doc = pd.DataFrame({df_data.columns.values[0] : [],df_data.columns.values[1] : [],df_data.columns.values[2] : [],df_data.columns.values[3] : [],df_data.columns.values[4] : []})
     # coords = set( df_data['GPS'].to_list())
     coords = np.unique(df_data['GPS'])
-    print(coords.shape)
+    # print(coords.shape)
     i = 0
     # print(df_data)
     # print(coords)
@@ -269,7 +268,7 @@ def irrigation(Data = 'LAI Ex.xlsx',Wth = 'Meteo.xlsx', next_date= "2022-05-08",
         i =+1
 
     return New_doc
-print(irrigation())
+# print(irrigation())
 
 
 def afficher(Data = '/DSSAT47/LAI Ex.xlsx',Wth = '/DSSAT47/Meteo.xlsx'):

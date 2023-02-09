@@ -7,8 +7,7 @@ import DSSATTools
 
 from datetime import datetime, timedelta
 from DSSATTools import (
-    Crop, SoilProfile, WeatherData, WeatherStation, Management, DSSAT
-)
+    Crop, SoilProfile, WeatherData, WeatherStation, Management, DSSAT)
 from DSSATTools.base.sections import TabularSubsection
 from tradssat import CULFile, ECOFile
 from scipy.optimize import minimize
@@ -84,8 +83,12 @@ class IrrigationAnalysis:
     def results(self, irrig = None , Param = 'LAID', type_ir = 'R'):
         '''
         Inputs:
+        - irrig: Optional. Irrigation values 
+        - Param: The parameter to analise
+        - type_ir: if the irrigation is given (R) or automatic (A)
 
-        Output
+        Output:
+        - Dataframe with containing the value of the parameter in each day
         '''
         if type_ir == 'R':
             if irrig is None:
@@ -138,15 +141,16 @@ class IrrigationAnalysis:
 
         if type_ir == 'A':
             result_df = pd.Series( 
-                index = list(dssat.output['SoilWat'].apply(lambda x: str(x['@YEAR'])[2:4]+str(x['DOY']), axis=1)),
+                index = list(dssat.output['SoilWat'].apply(lambda x: int(str(x['@YEAR'])[2:4]+str(x['DOY'])), axis=1)),
                 data = list(dssat.output['SoilWat']['IRRC']))
 
         #dssat.close() #On referme l'instance (cela supprime le fichier créé ). S'il y a une erreur sur cette ligne c'est qu'il y a un problème dans la fonction du module il faut changer la fonction close par celle qui est tout en bas de ce fichier
         return result_df
     
-    def afficher(self, irchange = None, show_graph=True):
+    def irri_TWAD(self, irchange = None, show_graph=True):
         '''
-        Function to see the effect of irrigation on the Total plant weight (kg dm/ia)
+        Function to see compare the normal Total plant weight (TWA) (kg dm/ia) 
+        with another with new irrigation values
         '''
         df_data = pd.read_excel(self.data_path)
         df_data.rename(columns={'Irval ': 'IRVAL'}, inplace=True)
@@ -225,10 +229,8 @@ class IrrigationAnalysis:
         return irrig_max
     
     def irrigation(self, next_date= "2022-05-08", New_LAI = [1.5,2,2,2], variables =['RUE1','PD','P2'], show_graph=False):
-        """Programme qui compile toutes les fonctions: 
-        sépration par coordonnées des données puis on 
-        trouve les nouveaux coefficients, on trouve la dose d'eau puis 
-        on réécrit le fichier actualisé."""
+        """Program that compiles all functions: selection by coordinates of the data 
+        then we find the new coefficients, we find the water dose then we rewrite the updated file"""
         # Read data
         df_data = pd.read_excel(self.data_path)
         df_data.rename(columns={'Irval ': 'IRVAL'}, inplace=True)
@@ -264,7 +266,8 @@ class IrrigationAnalysis:
                           method = 'Nelder-Mead', options={'maxiter' : 10}, 
                           bounds = [(3.5,4),(0.5,1),(0.3,0.9)])
 
-        for i in range(len(variables)): #On fixe les paramètres
+        # Fix the parameters
+        for i in range(len(variables)): 
             self.crop.set_parameter(variables[i], fitted.x[i], 'IB0001')
     
     def fitting_function(self, params, irrig, data, dates, variables):
@@ -277,13 +280,73 @@ class IrrigationAnalysis:
         DATES = [date[0] for date in dates.values]
 
         model_prediction = self.results(irrig, Param ='LAID')[DATES].to_numpy()
+        print(model_prediction)
 
         return np.sqrt(sum(abs((model_prediction - data)**2))) 
 
+    def analysis(self, file_name='PlantGro'):
+        '''
+        @FILENAME          DESCRIPTION
+        ET.OUT             Daily soil-plant-atmosphere output file           
+        PlantGro.OUT       Daily plant growth output file                    
+        SoilTemp.OUT       Daily soil temperature output file                
+        SoilWat.OUT        Daily soil water output file                      
+        Weather.OUT        Daily weather output file                         
+        Mulch.OUT          Daily surface mulch output file                                                                                                                           
+        '''
+
+        if file_name not in ['ET', 'PlantGro', 'SoilTemp', 'SoilWat', 'Weather', 'Mulch']:
+            raise NameError('File name not valid')
+
+        df = pd.read_excel(self.wth_path)
+        df['DATE'] = df['date'].apply(change_date)[:]
+        df['SRAD'] =  [8 for i in range(df.shape[0])][:]
+        df_wth = df[['DATE', 'SRAD','TEMPERATURE_MAX', 'TEMPERATURE_MIN','RELATIVE_HUMIDITY', 'RAIN_FALL']][:]
+        
+        # Creation of the weather data
+        wth_data = WeatherData(
+            df_wth,
+            variables={
+                'TEMPERATURE_MIN': 'TMIN', 'TEMPERATURE_MAX': 'TMAX',
+                'RAIN_FALL': 'RAIN', 'SRAD': 'SRAD',
+                'RELATIVE_HUMIDITY': 'RHUM'}
+        )
+
+        # Creation of the weather station
+        wth_station = WeatherStation(
+            wth_data,
+            {'ELEV': 33, 'LAT': 0, 'LON': 0, 'INSI': 'dpoes'}
+        )
+
+        # Creation of Management (in potato case)
+        man = Management(
+            cultivar='IB0001',
+            planting_date = self.dates[0], harvest = 'M'
+        )
+        man.planting_details['table']['PLWT'] = 1500
+        man.planting_details['table']['SPRL'] = 2
+        man.simulation_controls['IRRIG'] = 'A'
+        
+        # Creation of the soil profile
+        soil = SoilProfile(default_class=self.soil)
+        dssat = DSSAT()
+        dssat.OUTPUT_LIST = [file_name,]
+
+        dssat.setup("C:\\Users\\MELANI~1\\AppData\\Local\\Temp\\Expe")
+
+        dssat.run(soil=soil, weather=wth_station, crop=self.crop, management=man)
+    
+        result_df = dssat.output[file_name]
+
+        #dssat.close() #On referme l'instance (cela supprime le fichier créé ). S'il y a une erreur sur cette ligne c'est qu'il y a un problème dans la fonction du module il faut changer la fonction close par celle qui est tout en bas de ce fichier
+        return result_df
 
     
 if __name__=='__main__':
     irri = IrrigationAnalysis()
-    # print(irri.afficher(irchange=[300,40,5,70,8], show_graph=True)) 
-    print( irri.results(type_ir='A'))
+    print(irri.irrigation())
+
+    # print(irri.analysis())
+    # print(irri.irri_TWAD(irchange=[300,40,5,70,8], show_graph=True)) 
+    # print( irri.results(type_ir='A'))
     # print(irri.irrigation(show_graph=True))
