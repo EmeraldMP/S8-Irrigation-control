@@ -144,7 +144,7 @@ class IrrigationAnalysis:
                 index = list(dssat.output['SoilWat'].apply(lambda x: int(str(x['@YEAR'])[2:4]+str(x['DOY'])), axis=1)),
                 data = list(dssat.output['SoilWat']['IRRC']))
 
-        #dssat.close() #On referme l'instance (cela supprime le fichier créé ). S'il y a une erreur sur cette ligne c'est qu'il y a un problème dans la fonction du module il faut changer la fonction close par celle qui est tout en bas de ce fichier
+        #dssat.close() 
         return result_df
     
     def irri_TWAD(self, irchange = None, show_graph=True):
@@ -223,7 +223,6 @@ class IrrigationAnalysis:
             plt.ylabel("Total plant weight (kg dm/ia)")
             plt.xlabel("Irrigation")
             plt.legend()
-            # plt.annotate(f'({IRV[i], TWAD_max[i]})', IRV[i], TWAD_max[i], textcoords="offset points", xytext=(0,10), ha='center', fontsize=10)
             plt.show() 
 
         return irrig_max
@@ -237,7 +236,11 @@ class IrrigationAnalysis:
         df_data['IDATES'] = df_data['Date'].apply(dssat_date)
         df_data['IROP'] =  ['IR001' for i in range(df_data.shape[0])]
 
-        New_doc = pd.DataFrame({df_data.columns.values[0] : [],df_data.columns.values[1] : [],df_data.columns.values[2] : [],df_data.columns.values[3] : [],df_data.columns.values[4] : []})
+        New_doc = pd.DataFrame({df_data.columns.values[0] : [],
+                                df_data.columns.values[1] : [],
+                                df_data.columns.values[2] : [],
+                                df_data.columns.values[3] : [],
+                                df_data.columns.values[4] : []})
         
         coords = np.unique(df_data['GPS'])
 
@@ -251,7 +254,12 @@ class IrrigationAnalysis:
             
             self.set_genetic_coeffs(initial_params, irrig, datas, dates, variables)
             IR = self.irrig_opti(next_date, irrig, show_graph=show_graph)
-            new_df_data_crop = pd.concat([df_data_crop[:],pd.DataFrame({df_data.columns.values[0] : [coords[i]],df_data.columns.values[1] : [New_LAI[i]],df_data.columns.values[2] : [change_date(next_date)],df_data.columns.values[3] : [IR]})])
+            new_df_data_crop = pd.concat([df_data_crop[:],
+                                        pd.DataFrame({df_data.columns.values[0] : [coords[i]],
+                                                      df_data.columns.values[1] : [New_LAI[i]],
+                                                      df_data.columns.values[2] : [change_date(next_date)],
+                                                      df_data.columns.values[3] : [IR]})])
+
             New_doc = pd.concat([New_doc,new_df_data_crop[:]])
 
         return New_doc
@@ -338,7 +346,7 @@ class IrrigationAnalysis:
     
         result_df = dssat.output[file_name]
 
-        #dssat.close() #On referme l'instance (cela supprime le fichier créé ). S'il y a une erreur sur cette ligne c'est qu'il y a un problème dans la fonction du module il faut changer la fonction close par celle qui est tout en bas de ce fichier
+        #dssat.close() 
         return result_df
 
     
