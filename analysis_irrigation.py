@@ -351,7 +351,7 @@ class IrrigationAnalysis:
     
 if __name__=='__main__':
     irri = IrrigationAnalysis()
-    print(irri.irrigation())
+    print(irri.crop.parameters)
 
     # print(irri.analysis())
     # print(irri.irri_TWAD(irchange=[300,40,5,70,8], show_graph=True)) 
