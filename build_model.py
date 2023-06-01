@@ -1,20 +1,23 @@
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-import seaborn as sns
 import numpy as np
-import matplotlib.pyplot as plt
 import subprocess
 import nevergrad as ng
+import time
+import json
 
 pd.options.plotting.backend = "plotly"
 
 
 from DSSATTools.base.formater import weather_data, weather_data_header, weather_station
-from datetime import datetime, timedelta
+from datetime import datetime
 from DSSATTools import (
     Crop, SoilProfile, WeatherData, WeatherStation, Management, DSSAT)
 from DSSATTools.base.sections import TabularSubsection
+
+
+with open('dssat_dic.json', 'r') as file:
+    dict_DSSAT = json.load(file)
 
 def change_date(x):
     '''
@@ -27,14 +30,21 @@ class CreateDSSAT:
 
     def __init__(self):
         self.soil = SoilProfile(default_class='SIC')
+        self.dict_DSSAT = dict_DSSAT
         self.crop = Crop('Potato')
         self.wth = None
         self.man = None
         self.dates = pd.date_range('2000-01-01', '2002-12-31')
         self.dssat = None
+        self.dssat_opt = None
         self.schedule = None
         self.next_dates = None
-        self.max_val_irrig = 60
+        self.max_val_irrig = 50
+        self.TWAD_weight = 8
+        self.irr_weight = 10
+        self.output = None
+        self.new_output = None
+        self.optimal_values = None
 
     def create_wth_station(self, wth_path = None, dates = ('2000-01-01', '2002-12-31'),
                            elev = 119, lat=49.56635317268511, long =2.4733156772560965):
@@ -73,6 +83,8 @@ class CreateDSSAT:
             df['SRAD'] =  [8 for i in range(df.shape[0])][:]
 
             df_wth = df[['DATE', 'SRAD','TEMPERATURE_MAX', 'TEMPERATURE_MIN','RELATIVE_HUMIDITY', 'RAIN_FALL']][:]
+
+            # Check if a variable is missing
 
             # Creation of the weather data
             wth_data = WeatherData(
@@ -120,6 +132,7 @@ class CreateDSSAT:
         else:
             try:
                 df = pd.read_excel(man_path, header=[0,1])
+                df = df.dropna(axis=0)
             except:
                 print(f'Path "{man_path}" not recognized')
                 return None
@@ -142,7 +155,7 @@ class CreateDSSAT:
                                     'IRVAL': df[('Précipitations [mm]','Somme')]})
             schedule['IDATE'] = schedule.date.dt.strftime('%y%j')
             schedule['IROP'] = 'IR001' # Code to define the irrigation operation
-            self.schedule = schedule
+            self.schedule = schedule[['IDATE', 'IROP', 'IRVAL']]
             self.man.irrigation['table'] = TabularSubsection(schedule[['IDATE', 'IROP', 'IRVAL']])   
 
     def run_DSSAT(self):
@@ -155,9 +168,11 @@ class CreateDSSAT:
         else:
             self.dssat = DSSAT()
             self.dssat.setup()
+            self.dssat.OUTPUT_LIST = ['PlantGro',]
             self.dssat.run(
                 soil=self.soil, weather=self.wth, crop=self.crop, management=self.man,
             )
+            self.output = self.dssat.output['PlantGro']
 
     def close_DSSAT(self, other_dssat = None):
         if other_dssat is None:
@@ -181,9 +196,11 @@ class CreateDSSAT:
 
                 dssat_to_close.close()   
 
-    def irri_cost(self, irval=[0,0,0,0]):
+    def irri_cost(self, irval, save=False):
         if self.next_dates:
-            
+            if isinstance(self.next_dates[0], str):
+                self.next_dates = [datetime.strptime(date_string, '%d-%m-%Y') for date_string in self.next_dates]
+
             new_schedule = pd.DataFrame({'date': self.next_dates,
                             'IRVAL' : irval})
             new_schedule['IDATE'] = new_schedule.date.dt.strftime('%y%j')
@@ -200,24 +217,32 @@ class CreateDSSAT:
             soil=self.soil, weather=self.wth, crop=self.crop, management=self.man,
             )
 
+            if save:
+                self.new_output = dssat.output['PlantGro']
+                print('Output model save in attribute new_output')
+
             TWAD = dssat.output['PlantGro']['TWAD'][-1]
             self.close_DSSAT(dssat)
 
-            weight = 8
-            return weight*-(1/TWAD+0.001) + (np.sum(irval)/(self.max_val_irrig*len(irval)))**2
+            print(f'TWAD: {TWAD}       Sum irrigation: {total_schedule.IRVAL.sum():.2f}')
+
+            # return self.TWAD_weight * (1/(TWAD+0.001)) + self.irr_weight * (np.sum(irval)/(self.max_val_irrig * len(irval)))**2
+            TWAD_harvest = 30000
+            return self.TWAD_weight * 10000/(TWAD+0.001) + self.irr_weight * (np.sum(irval)/(self.max_val_irrig * len(irval)))**2
         
         else:
             raise('There is not dates to optimize')
 
     def optimization_irri(self, next_dates):
+
+        ini = time.time()
         self.next_dates = [datetime.strptime(date_string, '%d-%m-%Y') for date_string in next_dates]
         rep = len(self.next_dates)
-        print(self.next_dates)
 
         # Definition of the optimization problem
 
         # Discrete, ordered
-        param = ng.p.TransitionChoice(range(self.max_val_irrig), repetitions=rep)
+        param = ng.p.TransitionChoice(np.array(range(self.max_val_irrig * 10)) * 0.1, repetitions=rep)
         optimizer = ng.optimizers.DiscreteOnePlusOne(parametrization=param, budget=100)
         # optimizer = ng.optimizers.DiscreteOnePlusOne(parametrization=param, budget=100, num_workers=1)
 
@@ -228,21 +253,52 @@ class CreateDSSAT:
             optimizer.tell(x, loss)
 
         recommendation = optimizer.provide_recommendation()
+        end = time.time()
+        print(f'Execution time: {round(end-ini, 2)}')
         print(f'The optimal values are {recommendation.value}')
 
+        self.optimal_values = recommendation.value
+
         return recommendation.value
-        
+    
+    def opt_model(self):
+        if self.optimal_values is None:
+            print('The model has not been optimized')
+        else:
+            new_schedule = pd.DataFrame({'date': self.next_dates,
+                            'IRVAL' : self.optimal_values})
+            new_schedule['IDATE'] = new_schedule.date.dt.strftime('%y%j')
+            new_schedule['IROP'] = 'IR001' # Code to define the irrigation operation
+            new_schedule = new_schedule[['IDATE', 'IROP', 'IRVAL']]
+
+            total_schedule = pd.concat([self.schedule, new_schedule])
+
+            self.man.irrigation['table'] = TabularSubsection(total_schedule)
+
+            self.dssat_opt = DSSAT()
+            self.dssat_opt.setup()
+            self.dssat_opt.run(
+                soil=self.soil, weather=self.wth, crop=self.crop, management=self.man,
+                )
+
+            self.new_output = dssat.output['PlantGro']
 
 
 
 if __name__ == '__main__':
     dssat = CreateDSSAT()
-    # dssat.create_wth_station('Data\Weather\Essai irrigation.xlsx')
-    # dssat.create_management('Data\Probes\Sonde Robot 2.xlsx')
-    dssat.create_wth_station()
-    dssat.create_management()
+    # Path of the weather and managment files
+    wth_path = "Data\Weather\Essai irrigation mod.xlsx"
+    man_path = "Data\Probes\Sonde Robot 2 mod.xlsx"
+
+    # Create DSSAT object
+    dssat = CreateDSSAT()
+
+    # Create stations
+    dssat.create_wth_station(wth_path)
+    dssat.create_management(man_path)
     # dssat.run_DSSAT()
-    dates = ['15-1-2000', '28-1-2000', '25-2-2000', '24-2-2000']
-    dssat.optimization_irri(dates)
+    # dates = ['15-1-2000', '28-1-2000', '25-2-2000', '24-2-2000']
+    # dssat.optimization_irri(dates)
     # dssat.close_DSSAT()
 

@@ -100,3 +100,20 @@ dates = ['12-08-2022', '15-08-2022', '18-08-2022', '20-08-2022']
 CreateDSSAT.next_dates = dates
 CreateDSSAT.optimization_irri(dates)
 ```
+
+
+## Personalization
+
+These are the default settings, but you can customize them according to your needs. The customizable variables, in addition to the one mentioned earlier, are:
+
+- `soil`: You can provide another soil profile as presented in the DSSAT documentation (object of DSSAT).
+- `crop`: You can provide another crop profile as presented in the DSSAT documentation (object of DSSAT).
+- `max_val_irrig`: The maximum value of water that can be given to the plants per day (integer).
+- `TWAD_weight`: Modify the weight representing the total crop weight in the cost function of the optimization (integer).
+- `irr_weight`: Modify the weight representing the irrigation in the cost function of the optimization (integer).
+
+To modify these variables, use the following code in Python:
+
+```python
+CreateDSSAT.variable = value
+```
