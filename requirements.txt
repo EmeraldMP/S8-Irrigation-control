@@ -1,9 +1,7 @@
-time
 matplotlib
 pandas
 numpy 
-subprocess
 nevergrad
 datetime
 DSSATTools
-json
+plotly
